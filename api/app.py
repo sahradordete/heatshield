@@ -14,13 +14,14 @@ Try:
 This is a TEACHING EXAMPLE, not a finished Heat Shield application.
 There is no authentication: run locally only, using fictional data.
 """
+import os
 
 from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 
 # 1. Set up Flask and the SQLite database.
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///heatshield.db"
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///heatshield.db")
 db = SQLAlchemy(app)
 
 
