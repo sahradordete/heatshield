@@ -31,16 +31,16 @@ ALLOWED = {"category": CATEGORIES, "priority": PRIORITIES, "status": STATUSES}
 
 
 # 2. MODEL: a Python class representing a database table.
+# MODEL: a cooling centre that residents can be booked into.
 class SupportRequest(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    description = db.Column(db.String(500), nullable=False)
+    description = db.Column(db.Text, nullable=False)
     category = db.Column(db.String(50), nullable=False)
     area = db.Column(db.String(80), nullable=False)
     priority = db.Column(db.String(20), nullable=False, default="medium")
     status = db.Column(db.String(20), nullable=False, default="new")
 
     def to_dict(self):
-        """Turn a database object into JSON-friendly data."""
         return {
             "id": self.id,
             "description": self.description,
@@ -49,6 +49,40 @@ class SupportRequest(db.Model):
             "priority": self.priority,
             "status": self.status,
         }
+class CoolingCentre(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    area = db.Column(db.String(80), nullable=False)
+    capacity = db.Column(db.Integer, nullable=False)
+    opening_hours = db.Column(db.String(50), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default="open")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "area": self.area,
+            "capacity": self.capacity,
+            "opening_hours": self.opening_hours,
+            "status": self.status,
+        }
+
+
+# Fictional seed data: (name, area, capacity, opening_hours).
+SEED_CENTRES = [
+    ("Bolton Community Centre", "Bolton", 3, "09:00-17:00"),
+    ("Farnworth Library Hall", "Farnworth", 2, "10:00-16:00"),
+    ("Horwich Leisure Hall", "Horwich", 4, "09:00-18:00"),
+]
+
+
+def seed_centres():
+    """Add the fictional centres, but only if the table is empty."""
+    if db.session.scalar(db.select(db.func.count(CoolingCentre.id))) == 0:
+        for name, area, capacity, hours in SEED_CENTRES:
+            db.session.add(CoolingCentre(name=name, area=area, capacity=capacity,
+                                         opening_hours=hours, status="open"))
+        db.session.commit()
 
 
 # 3. HEALTH CHECK: a simple way to check whether Flask is running.
@@ -155,12 +189,26 @@ def delete_request(request_id):
     db.session.commit()
     return "", 204  # Success: no response body.
 
+# CENTRES: read all centres, or one centre by ID.
+@app.get("/api/centres")
+def list_centres():
+    records = db.session.scalars(db.select(CoolingCentre).order_by(CoolingCentre.id)).all()
+    return jsonify([record.to_dict() for record in records])
+
+
+@app.get("/api/centres/<int:centre_id>")
+def get_centre(centre_id):
+    record = db.session.get(CoolingCentre, centre_id)
+    if record is None:
+        return jsonify({"error": "Centre not found"}), 404
+    return jsonify(record.to_dict())
 
 if __name__ == "__main__":
     # Create the table if it does not already exist.
     # Later: consider proper database migrations when changing the schema.
     with app.app_context():
         db.create_all()
+        seed_centres()
 
     # Flask's debug server is only suitable for LOCAL development.
     app.run(debug=True, host="127.0.0.1", port=5000)
