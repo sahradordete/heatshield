@@ -24,6 +24,11 @@ app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///heatshield.db")
 db = SQLAlchemy(app)
 
+CATEGORIES = ("cooling_space", "welfare_visit", "practical_assistance")
+PRIORITIES = ("low", "medium", "high")
+STATUSES = ("new", "in_progress", "completed")
+ALLOWED = {"category": CATEGORIES, "priority": PRIORITIES, "status": STATUSES}
+
 
 # 2. MODEL: a Python class representing a database table.
 class SupportRequest(db.Model):
@@ -96,6 +101,11 @@ def create_request():
         ):
             return jsonify({"error": f"{field} must be text"}), 400
 
+    for field, allowed in ALLOWED.items():
+        value = data.get(field)
+        if value is not None and value.strip() not in allowed:
+            return jsonify({"error": f"{field} must be one of {list(allowed)}"}), 400
+
     record = SupportRequest(
         description=data["description"].strip(),
         category=data["category"].strip(),
@@ -125,6 +135,9 @@ def update_request(request_id):
             return jsonify({"error": f"Cannot update {field}"}), 400
         if not isinstance(value, str) or not value.strip():
             return jsonify({"error": f"{field} must contain text"}), 400
+        
+        if field in ALLOWED and value.strip() not in ALLOWED[field]:
+            return jsonify({"error": f"{field} must be one of {list(ALLOWED[field])}"}), 400
         setattr(record, field, value.strip())
 
     db.session.commit()
