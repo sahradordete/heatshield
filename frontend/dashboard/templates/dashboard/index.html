@@ -1,0 +1,89 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Heat Shield — Staff Dashboard</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; color: #111; }
+    h1, h2 { border-bottom: 1px solid #ddd; padding-bottom: 0.4rem; }
+    form { display: grid; gap: 0.75rem; background: #f6f6f6; padding: 1rem; border-radius: 6px; margin-bottom: 2rem; }
+    .row { display: flex; gap: 0.75rem; }
+    input, select, button { padding: 0.5rem; font-size: 0.95rem; }
+    input { flex: 1; }
+    button { background: #111; color: #fff; border: none; cursor: pointer; padding: 0.5rem 1.2rem; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; }
+    th, td { border: 1px solid #ddd; padding: 0.6rem; text-align: left; }
+    th { background: #f0f0f0; }
+  </style>
+</head>
+<body>
+  <h1>Heat Shield — Staff Dashboard</h1>
+
+  <form method="post">
+    {% csrf_token %}
+    <input type="text" name="description" placeholder="Describe support needed..." required>
+    <div class="row">
+      <select name="category">
+        <option value="Welfare">Welfare</option>
+        <option value="Cooling Space">Cooling Space</option>
+        <option value="Transport">Transport</option>
+      </select>
+      <select name="priority">
+        <option value="Low">Low</option>
+        <option value="Medium" selected>Medium</option>
+        <option value="High">High</option>
+      </select>
+      <select name="area">
+        <option value="Bolton">Bolton</option>
+        <option value="Farnworth">Farnworth</option>
+        <option value="Horwich">Horwich</option>
+      </select>
+      <button type="submit">Add Request</button>
+    </div>
+  </form>
+
+  <h2>Support Requests</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th><th>Description</th><th>Category</th><th>Priority</th><th>Area</th><th>Status</th><th>Created</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in requests %}
+      <tr>
+        <td>#{{ r.request_id }}</td>
+        <td>{{ r.description }}</td>
+        <td>{{ r.category }}</td>
+        <td>{{ r.priority }}</td>
+        <td>{{ r.area }}</td>
+        <td>{{ r.status }}</td>
+        <td>{{ r.created_at }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7">No support requests yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>Cooling Centres</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th><th>Area</th><th>Capacity</th><th>Hours</th><th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in centres %}
+      <tr>
+        <td>{{ c.name }}</td>
+        <td>{{ c.area }}</td>
+        <td>{{ c.capacity }}</td>
+        <td>{{ c.opening_hours }}</td>
+        <td>{{ c.status }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>
