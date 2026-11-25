@@ -22,3 +22,7 @@ def test_update_rejects_invalid_status(client):
     rid = client.post("/api/requests", json=VALID).get_json()["id"]
     r = client.patch(f"/api/requests/{rid}", json={"status": "banana"})
     assert r.status_code == 400
+
+def test_delete_request_not_allowed(client):
+    rid = client.post("/api/requests", json=VALID).get_json()["id"]
+    assert client.delete(f"/api/requests/{rid}").status_code == 405
