@@ -39,6 +39,7 @@ class SupportRequest(db.Model):
     area = db.Column(db.String(80), nullable=False)
     priority = db.Column(db.String(20), nullable=False, default="medium")
     status = db.Column(db.String(20), nullable=False, default="new")
+    booking = db.relationship("Booking", back_populates="support_request", uselist=False)
 
     def to_dict(self):
         return {
@@ -56,6 +57,7 @@ class CoolingCentre(db.Model):
     capacity = db.Column(db.Integer, nullable=False)
     opening_hours = db.Column(db.String(50), nullable=False)
     status = db.Column(db.String(20), nullable=False, default="open")
+    bookings = db.relationship("Booking", back_populates="cooling_centre", lazy=True)
 
     def to_dict(self):
         return {
@@ -64,6 +66,35 @@ class CoolingCentre(db.Model):
             "area": self.area,
             "capacity": self.capacity,
             "opening_hours": self.opening_hours,
+            "status": self.status,
+        }
+
+# Booking Class
+class Booking(db.Model):
+    booking_id = db.Column(db.Integer, primary_key=True)
+    request_id = db.Column(
+        db.Integer, db.ForeignKey("support_request.id"), nullable=True, unique=True
+    )
+    centre_id = db.Column(
+        db.Integer, db.ForeignKey("cooling_centre.id"), nullable=False
+    )
+    booking_date = db.Column(db.Date, nullable=False)
+    booking_time = db.Column(db.String(50), nullable=False)
+    spaces_required = db.Column(db.Integer, nullable=False, default=1)
+    status = db.Column(db.String(20), nullable=False, default="Confirmed")
+
+    # ORM Relationships
+    support_request = db.relationship("SupportRequest", back_populates="booking")
+    cooling_centre = db.relationship("CoolingCentre", back_populates="bookings")
+
+    def to_dict(self):
+        return {
+            "booking_id": self.booking_id,
+            "request_id": self.request_id,
+            "centre_id": self.centre_id,
+            "booking_date": self.booking_date.isoformat() if self.booking_date else None,
+            "booking_time": self.booking_time,
+            "spaces_required": self.spaces_required,
             "status": self.status,
         }
 
@@ -177,17 +208,6 @@ def update_request(request_id):
     db.session.commit()
     return jsonify(record.to_dict())
 
-
-# 8. DELETE: included to illustrate CRUD; not necessarily appropriate
-# for real support records, where cancellation/retention may be preferable.
-@app.delete("/api/requests/<int:request_id>")
-def delete_request(request_id):
-    record = db.session.get(SupportRequest, request_id)
-    if record is None:
-        return jsonify({"error": "Request not found"}), 404
-    db.session.delete(record)
-    db.session.commit()
-    return "", 204  # Success: no response body.
 
 # CENTRES: read all centres, or one centre by ID.
 @app.get("/api/centres")
