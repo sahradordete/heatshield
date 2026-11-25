@@ -16,7 +16,7 @@ def test_list_centres(seeded_client):
 
 def test_centre_has_expected_fields(seeded_client):
     centre = seeded_client.get("/api/centres/1").get_json()
-    expected = {"id", "name", "area", "capacity", "opening_hours", "status"}
+    expected = {"centre_id", "name", "area", "capacity", "opening_hours", "status"}
     assert expected <= centre.keys()
     assert centre["status"] == "open"
 
