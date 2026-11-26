@@ -11,42 +11,68 @@
   <nav class="navbar navbar-dark bg-dark mb-4">
     <div class="container">
       <span class="navbar-brand fw-semibold mb-0 h1">Heat Shield — Staff Dashboard</span>
-      <span class="navbar-text text-light small">Bolton Operations</span>
+      <div class="d-flex align-items-center gap-3">
+        <span class="navbar-text text-light small">Bolton Operations</span>
+        {% if api_connected %}
+          <span class="badge bg-success">Flask API Connected</span>
+        {% else %}
+          <span class="badge bg-secondary">Mock Data Mode</span>
+        {% endif %}
+      </div>
     </div>
   </nav>
 
   <main class="container pb-5">
 
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert {% if message.tags == 'error' %}alert-danger{% else %}alert-success{% endif %}" role="alert">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+
+    <!-- Summary Counters (US07) -->
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm">
+          <div class="card-body py-3">
+            <div class="text-muted small">Outstanding Requests</div>
+            <div class="fs-4 fw-bold">{{ outstanding_count }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm">
+          <div class="card-body py-3">
+            <div class="text-muted small">Completed Requests</div>
+            <div class="fs-4 fw-bold text-success">{{ completed_count }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- New Support Request Form -->
     <div class="card border-0 shadow-sm mb-4">
-      <div class="card-header bg-white fw-semibold py-3">
-        New Support Request
-      </div>
+      <div class="card-header bg-white fw-semibold py-3">New Support Request</div>
       <div class="card-body">
         <form method="post" class="row g-2 align-items-center">
           {% csrf_token %}
+          <input type="hidden" name="action" value="create">
           <div class="col-12 col-md-5">
             <input type="text" name="description" class="form-control" placeholder="Describe support needed..." required>
           </div>
           <div class="col-6 col-md-2">
             <select name="category" class="form-select">
-              <option value="Welfare">Welfare</option>
-              <option value="Cooling Space">Cooling Space</option>
-              <option value="Transport">Transport</option>
+              {% for c in categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
             </select>
           </div>
           <div class="col-6 col-md-2">
             <select name="priority" class="form-select">
-              <option value="Low">Low</option>
-              <option value="Medium" selected>Medium</option>
-              <option value="High">High</option>
+              {% for value, label in priorities %}<option value="{{ value }}" {% if value == 'medium' %}selected{% endif %}>{{ label }}</option>{% endfor %}
             </select>
           </div>
           <div class="col-6 col-md-2">
             <select name="area" class="form-select">
-              <option value="Bolton">Bolton</option>
-              <option value="Farnworth">Farnworth</option>
-              <option value="Horwich">Horwich</option>
+              {% for a in areas %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
             </select>
           </div>
           <div class="col-6 col-md-1 d-grid">
@@ -56,24 +82,61 @@
       </div>
     </div>
 
-    <!-- Support Requests Table -->
+    <!-- Support Requests Table + Filters (US05) -->
     <div class="card border-0 shadow-sm mb-4">
       <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
         <span class="fw-semibold">Support Requests</span>
-        <span class="badge bg-secondary">{{ requests|length }} total</span>
+        <span class="badge bg-secondary">{{ requests|length }} shown</span>
       </div>
+
+      <div class="card-body border-bottom bg-white">
+        <form method="get" class="row g-2 align-items-center">
+          <div class="col-12 col-md-3">
+            <input type="text" name="q" value="{{ filters.q }}" class="form-control form-control-sm" placeholder="Search description...">
+          </div>
+          <div class="col-6 col-md-2">
+            <select name="category" class="form-select form-select-sm">
+              <option value="">All Categories</option>
+              {% for c in categories %}
+                <option value="{{ c }}" {% if filters.category == c %}selected{% endif %}>{{ c }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-6 col-md-2">
+            <select name="priority" class="form-select form-select-sm">
+              <option value="">All Priorities</option>
+              {% for value, label in priorities %}
+                <option value="{{ value }}" {% if filters.priority == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-6 col-md-2">
+            <select name="area" class="form-select form-select-sm">
+              <option value="">All Areas</option>
+              {% for a in areas %}
+                <option value="{{ a }}" {% if filters.area == a %}selected{% endif %}>{{ a }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-6 col-md-1">
+            <select name="status" class="form-select form-select-sm">
+              <option value="">Status</option>
+              {% for value, label in statuses %}
+                <option value="{{ value }}" {% if filters.status == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12 col-md-2 d-flex gap-1">
+            <button type="submit" class="btn btn-sm btn-outline-dark w-100">Filter</button>
+            <a href="." class="btn btn-sm btn-outline-secondary">Reset</a>
+          </div>
+        </form>
+      </div>
+
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
           <thead class="table-light">
-            <tr>
-              <th>ID</th>
-              <th>Description</th>
-              <th>Category</th>
-              <th>Priority</th>
-              <th>Area</th>
-              <th>Status</th>
-              <th>Created</th>
-            </tr>
+            <tr><th>ID</th><th>Description</th><th>Category</th><th>Priority</th><th>Area</th><th>Status</th><th>Update</th><th>Created</th></tr>
           </thead>
           <tbody>
             {% for r in requests %}
@@ -82,30 +145,33 @@
               <td>{{ r.description }}</td>
               <td>{{ r.category }}</td>
               <td>
-                {% if r.priority == 'High' %}
-                  <span class="badge bg-danger">High</span>
-                {% elif r.priority == 'Medium' %}
-                  <span class="badge bg-warning text-dark">Medium</span>
-                {% else %}
-                  <span class="badge bg-secondary">{{ r.priority }}</span>
-                {% endif %}
+                {% if r.priority == 'high' %}<span class="badge bg-danger">High</span>
+                {% elif r.priority == 'medium' %}<span class="badge bg-warning text-dark">Medium</span>
+                {% else %}<span class="badge bg-secondary">{{ r.priority|title }}</span>{% endif %}
               </td>
               <td>{{ r.area }}</td>
               <td>
-                {% if r.status == 'In Progress' %}
-                  <span class="badge bg-primary">In Progress</span>
-                {% elif r.status == 'Resolved' %}
-                  <span class="badge bg-success">Resolved</span>
-                {% else %}
-                  <span class="badge bg-light text-dark border">{{ r.status }}</span>
-                {% endif %}
+                {% if r.status == 'in_progress' %}<span class="badge bg-primary">In Progress</span>
+                {% elif r.status == 'completed' %}<span class="badge bg-success">Completed</span>
+                {% else %}<span class="badge bg-light text-dark border">{{ r.status|title }}</span>{% endif %}
+              </td>
+              <td>
+                <form method="post" class="d-flex gap-1">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="update_status">
+                  <input type="hidden" name="request_id" value="{{ r.request_id }}">
+                  <select name="status" class="form-select form-select-sm" style="min-width: 120px;">
+                    {% for value, label in statuses %}
+                      <option value="{{ value }}" {% if r.status == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                  <button type="submit" class="btn btn-sm btn-outline-dark">Save</button>
+                </form>
               </td>
               <td class="text-muted small">{{ r.created_at }}</td>
             </tr>
             {% empty %}
-            <tr>
-              <td colspan="7" class="text-center text-muted py-4">No support requests yet.</td>
-            </tr>
+            <tr><td colspan="8" class="text-center text-muted py-4">No matching support requests found.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -120,15 +186,7 @@
       </div>
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
-          <thead class="table-light">
-            <tr>
-              <th>Name</th>
-              <th>Area</th>
-              <th>Capacity</th>
-              <th>Hours</th>
-              <th>Status</th>
-            </tr>
-          </thead>
+          <thead class="table-light"><tr><th>Name</th><th>Area</th><th>Capacity</th><th>Hours</th><th>Status</th></tr></thead>
           <tbody>
             {% for c in centres %}
             <tr>
@@ -137,11 +195,8 @@
               <td>{{ c.capacity }}</td>
               <td class="text-muted small">{{ c.opening_hours }}</td>
               <td>
-                {% if c.status == 'Open' %}
-                  <span class="badge bg-success">Open</span>
-                {% else %}
-                  <span class="badge bg-secondary">{{ c.status }}</span>
-                {% endif %}
+                {% if c.status == 'open' %}<span class="badge bg-success">Open</span>
+                {% else %}<span class="badge bg-secondary">{{ c.status|title }}</span>{% endif %}
               </td>
             </tr>
             {% endfor %}
@@ -151,6 +206,5 @@
     </div>
 
   </main>
-
 </body>
 </html>

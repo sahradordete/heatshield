@@ -1,11 +1,11 @@
 import copy
 from unittest.mock import patch
-from urllib.error import URLError
 
 from django.test import TestCase
 from django.urls import reverse
 
 from . import views
+from .api_client import ApiError
 
 
 class DashboardViewTests(TestCase):
@@ -16,8 +16,8 @@ class DashboardViewTests(TestCase):
     def tearDown(self):
         views.MOCK_REQUESTS[:] = self.original_requests
 
-    @patch("dashboard.views._fetch_json", side_effect=URLError("API offline"))
-    def test_renders_mock_data_and_counters_when_api_offline(self, _mock_fetch):
+    @patch("dashboard.views.api_client.list_requests", side_effect=ApiError("API offline"))
+    def test_renders_mock_data_and_counters_when_api_offline(self, _mock_list):
         response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, 200)
@@ -27,30 +27,29 @@ class DashboardViewTests(TestCase):
         self.assertContains(response, "Mock Data Mode")
         self.assertContains(response, "Bolton Community Centre")
 
-    @patch("dashboard.views._fetch_json")
-    def test_renders_flask_api_data_when_connected(self, mock_fetch):
-        mock_fetch.side_effect = [
-            [
-                {
-                    "request_id": 99,
-                    "description": "Live Flask request",
-                    "category": "Welfare",
-                    "priority": "High",
-                    "area": "Bolton",
-                    "status": "New",
-                    "created_at": "2026-11-26 12:00",
-                }
-            ],
-            [
-                {
-                    "centre_id": 10,
-                    "name": "API Cooling Hub",
-                    "area": "Bolton",
-                    "capacity": 60,
-                    "opening_hours": "08:00 - 21:00",
-                    "status": "Open",
-                }
-            ],
+    @patch("dashboard.views.api_client.list_centres")
+    @patch("dashboard.views.api_client.list_requests")
+    def test_renders_flask_api_data_when_connected(self, mock_requests, mock_centres):
+        mock_requests.return_value = [
+            {
+                "request_id": 99,
+                "description": "Live Flask request",
+                "category": "Welfare",
+                "priority": "high",
+                "area": "Bolton",
+                "status": "new",
+                "created_at": "2026-11-26T12:00:00.000000",
+            }
+        ]
+        mock_centres.return_value = [
+            {
+                "centre_id": 10,
+                "name": "API Cooling Hub",
+                "area": "Bolton",
+                "capacity": 60,
+                "opening_hours": "08:00 - 21:00",
+                "status": "open",
+            }
         ]
 
         response = self.client.get(self.url)
@@ -63,16 +62,16 @@ class DashboardViewTests(TestCase):
         self.assertContains(response, "Live Flask request")
         self.assertContains(response, "API Cooling Hub")
 
-    @patch("dashboard.views._fetch_json", side_effect=URLError("API offline"))
-    def test_filters_by_query_category_priority_area_and_status(self, _mock_fetch):
+    @patch("dashboard.views.api_client.list_requests", side_effect=ApiError("API offline"))
+    def test_filters_by_query_category_priority_area_and_status(self, _mock_list):
         response = self.client.get(
             self.url,
             {
                 "q": "cooling centre",
                 "category": "Practical Assistance",
-                "priority": "Medium",
+                "priority": "medium",
                 "area": "Farnworth",
-                "status": "In Progress",
+                "status": "in_progress",
             },
         )
 
@@ -80,15 +79,15 @@ class DashboardViewTests(TestCase):
         self.assertEqual(len(response.context["requests"]), 1)
         self.assertEqual(response.context["requests"][0]["request_id"], 2)
 
-    @patch("dashboard.views._send_json", side_effect=URLError("API offline"))
-    def test_create_request_falls_back_to_mock_list(self, _mock_send):
+    @patch("dashboard.views.api_client.create_request", side_effect=ApiError("API offline"))
+    def test_create_request_falls_back_to_mock_list(self, _mock_create):
         response = self.client.post(
             self.url,
             {
                 "action": "create",
                 "description": "Needs water bottles delivered",
                 "category": "Practical Assistance",
-                "priority": "High",
+                "priority": "high",
                 "area": "Bolton",
             },
         )
@@ -96,33 +95,33 @@ class DashboardViewTests(TestCase):
         self.assertRedirects(response, self.url, fetch_redirect_response=False)
         self.assertEqual(views.MOCK_REQUESTS[0]["description"], "Needs water bottles delivered")
         self.assertEqual(views.MOCK_REQUESTS[0]["category"], "Practical Assistance")
-        self.assertEqual(views.MOCK_REQUESTS[0]["status"], "New")
+        self.assertEqual(views.MOCK_REQUESTS[0]["status"], "new")
 
-    @patch("dashboard.views._send_json", side_effect=URLError("API offline"))
-    def test_update_status_falls_back_to_mock_list(self, _mock_send):
+    @patch("dashboard.views.api_client.update_request", side_effect=ApiError("API offline"))
+    def test_update_status_falls_back_to_mock_list(self, _mock_update):
         response = self.client.post(
             self.url,
             {
                 "action": "update_status",
                 "request_id": "1",
-                "status": "Completed",
+                "status": "completed",
             },
         )
 
         self.assertRedirects(response, self.url, fetch_redirect_response=False)
         updated = next(r for r in views.MOCK_REQUESTS if r["request_id"] == 1)
-        self.assertEqual(updated["status"], "Completed")
+        self.assertEqual(updated["status"], "completed")
 
-    @patch("dashboard.views._send_json")
-    def test_update_status_sends_patch_to_flask_api(self, mock_send):
+    @patch("dashboard.views.api_client.update_request")
+    def test_update_status_sends_patch_to_flask_api(self, mock_update):
         response = self.client.post(
             self.url,
             {
                 "action": "update_status",
                 "request_id": "2",
-                "status": "Completed",
+                "status": "completed",
             },
         )
 
         self.assertRedirects(response, self.url, fetch_redirect_response=False)
-        mock_send.assert_called_once_with("/requests/2", {"status": "Completed"}, method="PATCH")
+        mock_update.assert_called_once_with(2, {"status": "completed"})
