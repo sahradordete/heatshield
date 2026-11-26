@@ -11,7 +11,8 @@
   <nav class="navbar navbar-dark bg-dark mb-4">
     <div class="container">
       <span class="navbar-brand fw-semibold mb-0 h1">Heat Shield — Staff Dashboard</span>
-      <div>
+      <div class="d-flex align-items-center gap-3">
+        <span class="navbar-text text-light small">Bolton Operations</span>
         {% if api_connected %}
           <span class="badge bg-success">Flask API Connected</span>
         {% else %}
@@ -22,6 +23,12 @@
   </nav>
 
   <main class="container pb-5">
+
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert {% if message.tags == 'error' %}alert-danger{% else %}alert-success{% endif %}" role="alert">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
 
     <!-- Summary Counters (US07) -->
     <div class="row g-3 mb-4">
@@ -45,9 +52,7 @@
 
     <!-- New Support Request Form -->
     <div class="card border-0 shadow-sm mb-4">
-      <div class="card-header bg-white fw-semibold py-3">
-        New Support Request
-      </div>
+      <div class="card-header bg-white fw-semibold py-3">New Support Request</div>
       <div class="card-body">
         <form method="post" class="row g-2 align-items-center">
           {% csrf_token %}
@@ -57,23 +62,17 @@
           </div>
           <div class="col-6 col-md-2">
             <select name="category" class="form-select">
-              <option value="Welfare">Welfare</option>
-              <option value="Cooling Space">Cooling Space</option>
-              <option value="Practical Assistance">Practical Assistance</option>
+              {% for c in categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
             </select>
           </div>
           <div class="col-6 col-md-2">
             <select name="priority" class="form-select">
-              <option value="Low">Low</option>
-              <option value="Medium" selected>Medium</option>
-              <option value="High">High</option>
+              {% for value, label in priorities %}<option value="{{ value }}" {% if value == 'medium' %}selected{% endif %}>{{ label }}</option>{% endfor %}
             </select>
           </div>
           <div class="col-6 col-md-2">
             <select name="area" class="form-select">
-              <option value="Bolton">Bolton</option>
-              <option value="Farnworth">Farnworth</option>
-              <option value="Horwich">Horwich</option>
+              {% for a in areas %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
             </select>
           </div>
           <div class="col-6 col-md-1 d-grid">
@@ -98,33 +97,33 @@
           <div class="col-6 col-md-2">
             <select name="category" class="form-select form-select-sm">
               <option value="">All Categories</option>
-              <option value="Welfare" {% if filters.category == 'Welfare' %}selected{% endif %}>Welfare</option>
-              <option value="Cooling Space" {% if filters.category == 'Cooling Space' %}selected{% endif %}>Cooling Space</option>
-              <option value="Practical Assistance" {% if filters.category == 'Practical Assistance' %}selected{% endif %}>Practical Assistance</option>
+              {% for c in categories %}
+                <option value="{{ c }}" {% if filters.category == c %}selected{% endif %}>{{ c }}</option>
+              {% endfor %}
             </select>
           </div>
           <div class="col-6 col-md-2">
             <select name="priority" class="form-select form-select-sm">
               <option value="">All Priorities</option>
-              <option value="Low" {% if filters.priority == 'Low' %}selected{% endif %}>Low</option>
-              <option value="Medium" {% if filters.priority == 'Medium' %}selected{% endif %}>Medium</option>
-              <option value="High" {% if filters.priority == 'High' %}selected{% endif %}>High</option>
+              {% for value, label in priorities %}
+                <option value="{{ value }}" {% if filters.priority == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
             </select>
           </div>
           <div class="col-6 col-md-2">
             <select name="area" class="form-select form-select-sm">
               <option value="">All Areas</option>
-              <option value="Bolton" {% if filters.area == 'Bolton' %}selected{% endif %}>Bolton</option>
-              <option value="Farnworth" {% if filters.area == 'Farnworth' %}selected{% endif %}>Farnworth</option>
-              <option value="Horwich" {% if filters.area == 'Horwich' %}selected{% endif %}>Horwich</option>
+              {% for a in areas %}
+                <option value="{{ a }}" {% if filters.area == a %}selected{% endif %}>{{ a }}</option>
+              {% endfor %}
             </select>
           </div>
           <div class="col-6 col-md-1">
             <select name="status" class="form-select form-select-sm">
               <option value="">Status</option>
-              <option value="New" {% if filters.status == 'New' %}selected{% endif %}>New</option>
-              <option value="In Progress" {% if filters.status == 'In Progress' %}selected{% endif %}>In Progress</option>
-              <option value="Completed" {% if filters.status == 'Completed' %}selected{% endif %}>Completed</option>
+              {% for value, label in statuses %}
+                <option value="{{ value }}" {% if filters.status == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
             </select>
           </div>
           <div class="col-12 col-md-2 d-flex gap-1">
@@ -137,16 +136,7 @@
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
           <thead class="table-light">
-            <tr>
-              <th>ID</th>
-              <th>Description</th>
-              <th>Category</th>
-              <th>Priority</th>
-              <th>Area</th>
-              <th>Status</th>
-              <th>Update</th>
-              <th>Created</th>
-            </tr>
+            <tr><th>ID</th><th>Description</th><th>Category</th><th>Priority</th><th>Area</th><th>Status</th><th>Update</th><th>Created</th></tr>
           </thead>
           <tbody>
             {% for r in requests %}
@@ -155,23 +145,15 @@
               <td>{{ r.description }}</td>
               <td>{{ r.category }}</td>
               <td>
-                {% if r.priority == 'High' %}
-                  <span class="badge bg-danger">High</span>
-                {% elif r.priority == 'Medium' %}
-                  <span class="badge bg-warning text-dark">Medium</span>
-                {% else %}
-                  <span class="badge bg-secondary">{{ r.priority }}</span>
-                {% endif %}
+                {% if r.priority == 'high' %}<span class="badge bg-danger">High</span>
+                {% elif r.priority == 'medium' %}<span class="badge bg-warning text-dark">Medium</span>
+                {% else %}<span class="badge bg-secondary">{{ r.priority|title }}</span>{% endif %}
               </td>
               <td>{{ r.area }}</td>
               <td>
-                {% if r.status == 'In Progress' %}
-                  <span class="badge bg-primary">In Progress</span>
-                {% elif r.status == 'Completed' %}
-                  <span class="badge bg-success">Completed</span>
-                {% else %}
-                  <span class="badge bg-light text-dark border">{{ r.status }}</span>
-                {% endif %}
+                {% if r.status == 'in_progress' %}<span class="badge bg-primary">In Progress</span>
+                {% elif r.status == 'completed' %}<span class="badge bg-success">Completed</span>
+                {% else %}<span class="badge bg-light text-dark border">{{ r.status|title }}</span>{% endif %}
               </td>
               <td>
                 <form method="post" class="d-flex gap-1">
@@ -179,9 +161,9 @@
                   <input type="hidden" name="action" value="update_status">
                   <input type="hidden" name="request_id" value="{{ r.request_id }}">
                   <select name="status" class="form-select form-select-sm" style="min-width: 120px;">
-                    <option value="New" {% if r.status == 'New' %}selected{% endif %}>New</option>
-                    <option value="In Progress" {% if r.status == 'In Progress' %}selected{% endif %}>In Progress</option>
-                    <option value="Completed" {% if r.status == 'Completed' %}selected{% endif %}>Completed</option>
+                    {% for value, label in statuses %}
+                      <option value="{{ value }}" {% if r.status == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
                   </select>
                   <button type="submit" class="btn btn-sm btn-outline-dark">Save</button>
                 </form>
@@ -189,9 +171,7 @@
               <td class="text-muted small">{{ r.created_at }}</td>
             </tr>
             {% empty %}
-            <tr>
-              <td colspan="8" class="text-center text-muted py-4">No matching support requests found.</td>
-            </tr>
+            <tr><td colspan="8" class="text-center text-muted py-4">No matching support requests found.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -206,15 +186,7 @@
       </div>
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
-          <thead class="table-light">
-            <tr>
-              <th>Name</th>
-              <th>Area</th>
-              <th>Capacity</th>
-              <th>Hours</th>
-              <th>Status</th>
-            </tr>
-          </thead>
+          <thead class="table-light"><tr><th>Name</th><th>Area</th><th>Capacity</th><th>Hours</th><th>Status</th></tr></thead>
           <tbody>
             {% for c in centres %}
             <tr>
@@ -223,11 +195,8 @@
               <td>{{ c.capacity }}</td>
               <td class="text-muted small">{{ c.opening_hours }}</td>
               <td>
-                {% if c.status == 'Open' %}
-                  <span class="badge bg-success">Open</span>
-                {% else %}
-                  <span class="badge bg-secondary">{{ c.status }}</span>
-                {% endif %}
+                {% if c.status == 'open' %}<span class="badge bg-success">Open</span>
+                {% else %}<span class="badge bg-secondary">{{ c.status|title }}</span>{% endif %}
               </td>
             </tr>
             {% endfor %}
@@ -237,6 +206,5 @@
     </div>
 
   </main>
-
 </body>
 </html>

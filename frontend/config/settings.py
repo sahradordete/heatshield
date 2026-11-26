@@ -126,3 +126,5 @@ MAILERS = {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
 }
+
+HEATSHIELD_API_URL = "http://127.0.0.1:5000/api"
