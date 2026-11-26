@@ -11,11 +11,37 @@
   <nav class="navbar navbar-dark bg-dark mb-4">
     <div class="container">
       <span class="navbar-brand fw-semibold mb-0 h1">Heat Shield — Staff Dashboard</span>
-      <span class="navbar-text text-light small">Bolton Operations</span>
+      <div>
+        {% if api_connected %}
+          <span class="badge bg-success">Flask API Connected</span>
+        {% else %}
+          <span class="badge bg-secondary">Mock Data Mode</span>
+        {% endif %}
+      </div>
     </div>
   </nav>
 
   <main class="container pb-5">
+
+    <!-- Summary Counters (US07) -->
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm">
+          <div class="card-body py-3">
+            <div class="text-muted small">Outstanding Requests</div>
+            <div class="fs-4 fw-bold">{{ outstanding_count }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm">
+          <div class="card-body py-3">
+            <div class="text-muted small">Completed Requests</div>
+            <div class="fs-4 fw-bold text-success">{{ completed_count }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- New Support Request Form -->
     <div class="card border-0 shadow-sm mb-4">
@@ -25,6 +51,7 @@
       <div class="card-body">
         <form method="post" class="row g-2 align-items-center">
           {% csrf_token %}
+          <input type="hidden" name="action" value="create">
           <div class="col-12 col-md-5">
             <input type="text" name="description" class="form-control" placeholder="Describe support needed..." required>
           </div>
@@ -32,7 +59,7 @@
             <select name="category" class="form-select">
               <option value="Welfare">Welfare</option>
               <option value="Cooling Space">Cooling Space</option>
-              <option value="Transport">Transport</option>
+              <option value="Practical Assistance">Practical Assistance</option>
             </select>
           </div>
           <div class="col-6 col-md-2">
@@ -56,12 +83,57 @@
       </div>
     </div>
 
-    <!-- Support Requests Table -->
+    <!-- Support Requests Table + Filters (US05) -->
     <div class="card border-0 shadow-sm mb-4">
       <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
         <span class="fw-semibold">Support Requests</span>
-        <span class="badge bg-secondary">{{ requests|length }} total</span>
+        <span class="badge bg-secondary">{{ requests|length }} shown</span>
       </div>
+
+      <div class="card-body border-bottom bg-white">
+        <form method="get" class="row g-2 align-items-center">
+          <div class="col-12 col-md-3">
+            <input type="text" name="q" value="{{ filters.q }}" class="form-control form-control-sm" placeholder="Search description...">
+          </div>
+          <div class="col-6 col-md-2">
+            <select name="category" class="form-select form-select-sm">
+              <option value="">All Categories</option>
+              <option value="Welfare" {% if filters.category == 'Welfare' %}selected{% endif %}>Welfare</option>
+              <option value="Cooling Space" {% if filters.category == 'Cooling Space' %}selected{% endif %}>Cooling Space</option>
+              <option value="Practical Assistance" {% if filters.category == 'Practical Assistance' %}selected{% endif %}>Practical Assistance</option>
+            </select>
+          </div>
+          <div class="col-6 col-md-2">
+            <select name="priority" class="form-select form-select-sm">
+              <option value="">All Priorities</option>
+              <option value="Low" {% if filters.priority == 'Low' %}selected{% endif %}>Low</option>
+              <option value="Medium" {% if filters.priority == 'Medium' %}selected{% endif %}>Medium</option>
+              <option value="High" {% if filters.priority == 'High' %}selected{% endif %}>High</option>
+            </select>
+          </div>
+          <div class="col-6 col-md-2">
+            <select name="area" class="form-select form-select-sm">
+              <option value="">All Areas</option>
+              <option value="Bolton" {% if filters.area == 'Bolton' %}selected{% endif %}>Bolton</option>
+              <option value="Farnworth" {% if filters.area == 'Farnworth' %}selected{% endif %}>Farnworth</option>
+              <option value="Horwich" {% if filters.area == 'Horwich' %}selected{% endif %}>Horwich</option>
+            </select>
+          </div>
+          <div class="col-6 col-md-1">
+            <select name="status" class="form-select form-select-sm">
+              <option value="">Status</option>
+              <option value="New" {% if filters.status == 'New' %}selected{% endif %}>New</option>
+              <option value="In Progress" {% if filters.status == 'In Progress' %}selected{% endif %}>In Progress</option>
+              <option value="Completed" {% if filters.status == 'Completed' %}selected{% endif %}>Completed</option>
+            </select>
+          </div>
+          <div class="col-12 col-md-2 d-flex gap-1">
+            <button type="submit" class="btn btn-sm btn-outline-dark w-100">Filter</button>
+            <a href="." class="btn btn-sm btn-outline-secondary">Reset</a>
+          </div>
+        </form>
+      </div>
+
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
           <thead class="table-light">
@@ -72,6 +144,7 @@
               <th>Priority</th>
               <th>Area</th>
               <th>Status</th>
+              <th>Update</th>
               <th>Created</th>
             </tr>
           </thead>
@@ -94,17 +167,30 @@
               <td>
                 {% if r.status == 'In Progress' %}
                   <span class="badge bg-primary">In Progress</span>
-                {% elif r.status == 'Resolved' %}
-                  <span class="badge bg-success">Resolved</span>
+                {% elif r.status == 'Completed' %}
+                  <span class="badge bg-success">Completed</span>
                 {% else %}
                   <span class="badge bg-light text-dark border">{{ r.status }}</span>
                 {% endif %}
+              </td>
+              <td>
+                <form method="post" class="d-flex gap-1">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="update_status">
+                  <input type="hidden" name="request_id" value="{{ r.request_id }}">
+                  <select name="status" class="form-select form-select-sm" style="min-width: 120px;">
+                    <option value="New" {% if r.status == 'New' %}selected{% endif %}>New</option>
+                    <option value="In Progress" {% if r.status == 'In Progress' %}selected{% endif %}>In Progress</option>
+                    <option value="Completed" {% if r.status == 'Completed' %}selected{% endif %}>Completed</option>
+                  </select>
+                  <button type="submit" class="btn btn-sm btn-outline-dark">Save</button>
+                </form>
               </td>
               <td class="text-muted small">{{ r.created_at }}</td>
             </tr>
             {% empty %}
             <tr>
-              <td colspan="7" class="text-center text-muted py-4">No support requests yet.</td>
+              <td colspan="8" class="text-center text-muted py-4">No matching support requests found.</td>
             </tr>
             {% endfor %}
           </tbody>
