@@ -1,3 +1,4 @@
+import os
 """
 Django settings for config project.
 
@@ -25,7 +26,7 @@ SECRET_KEY = 'django-insecure-eqno&d8rzab6q#bd+=!f+ae4psj006uwk7*6&5tvs81--2ts+4
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "*").split(",")
 
 
 # Application definition
@@ -127,4 +128,4 @@ MAILERS = {
     },
 }
 
-HEATSHIELD_API_URL = "http://127.0.0.1:5000/api"
+HEATSHIELD_API_URL = os.environ.get("HEATSHIELD_API_URL", "http://127.0.0.1:5000/api").rstrip("/")

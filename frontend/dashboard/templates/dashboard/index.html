@@ -14,9 +14,9 @@
       <div class="d-flex align-items-center gap-3">
         <span class="navbar-text text-light small">Bolton Operations</span>
         {% if api_connected %}
-          <span class="badge bg-success">Flask API Connected</span>
+          <span class="badge bg-success" title="{{ api_url }}">Flask API Connected</span>
         {% else %}
-          <span class="badge bg-secondary">Mock Data Mode</span>
+          <span class="badge bg-danger" title="{{ api_url }}">Flask API Offline</span>
         {% endif %}
       </div>
     </div>
@@ -24,27 +24,49 @@
 
   <main class="container pb-5">
 
+    {% if not api_connected %}
+      <div class="alert alert-danger" role="alert">
+        <strong>Backend Offline:</strong> {{ api_error }} ({{ api_url }}). Start the Flask server (<code>python api/app.py</code>) and refresh this page.
+      </div>
+    {% endif %}
+
     {% if messages %}
       {% for message in messages %}
         <div class="alert {% if message.tags == 'error' %}alert-danger{% else %}alert-success{% endif %}" role="alert">{{ message }}</div>
       {% endfor %}
     {% endif %}
 
-    <!-- Summary Counters (US07) -->
+    <!-- Summary Counters -->
     <div class="row g-3 mb-4">
       <div class="col-6 col-md-3">
         <div class="card border-0 shadow-sm">
           <div class="card-body py-3">
-            <div class="text-muted small">Outstanding Requests</div>
-            <div class="fs-4 fw-bold">{{ outstanding_count }}</div>
+            <div class="text-muted small">Total Requests</div>
+            <div class="fs-4 fw-bold">{{ total_count }}</div>
           </div>
         </div>
       </div>
       <div class="col-6 col-md-3">
         <div class="card border-0 shadow-sm">
           <div class="card-body py-3">
-            <div class="text-muted small">Completed Requests</div>
+            <div class="text-muted small">Outstanding</div>
+            <div class="fs-4 fw-bold text-warning">{{ outstanding_count }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm">
+          <div class="card-body py-3">
+            <div class="text-muted small">Completed</div>
             <div class="fs-4 fw-bold text-success">{{ completed_count }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm">
+          <div class="card-body py-3">
+            <div class="text-muted small">Confirmed Bookings</div>
+            <div class="fs-4 fw-bold text-primary">{{ confirmed_bookings_count }}</div>
           </div>
         </div>
       </div>
@@ -58,25 +80,25 @@
           {% csrf_token %}
           <input type="hidden" name="action" value="create">
           <div class="col-12 col-md-5">
-            <input type="text" name="description" class="form-control" placeholder="Describe support needed..." required>
+            <input type="text" name="description" class="form-control" placeholder="Describe support needed..." required {% if not api_connected %}disabled{% endif %}>
           </div>
           <div class="col-6 col-md-2">
-            <select name="category" class="form-select">
+            <select name="category" class="form-select" {% if not api_connected %}disabled{% endif %}>
               {% for c in categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
             </select>
           </div>
           <div class="col-6 col-md-2">
-            <select name="priority" class="form-select">
+            <select name="priority" class="form-select" {% if not api_connected %}disabled{% endif %}>
               {% for value, label in priorities %}<option value="{{ value }}" {% if value == 'medium' %}selected{% endif %}>{{ label }}</option>{% endfor %}
             </select>
           </div>
           <div class="col-6 col-md-2">
-            <select name="area" class="form-select">
+            <select name="area" class="form-select" {% if not api_connected %}disabled{% endif %}>
               {% for a in areas %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
             </select>
           </div>
           <div class="col-6 col-md-1 d-grid">
-            <button type="submit" class="btn btn-dark">Add</button>
+            <button type="submit" class="btn btn-dark" {% if not api_connected %}disabled{% endif %}>Add</button>
           </div>
         </form>
       </div>
@@ -136,7 +158,7 @@
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
           <thead class="table-light">
-            <tr><th>ID</th><th>Description</th><th>Category</th><th>Priority</th><th>Area</th><th>Status</th><th>Update</th><th>Created</th></tr>
+            <tr><th>ID</th><th>Description</th><th>Category</th><th>Priority</th><th>Area</th><th>Booking</th><th>Status</th><th>Update</th><th>Created</th></tr>
           </thead>
           <tbody>
             {% for r in requests %}
@@ -150,6 +172,17 @@
                 {% else %}<span class="badge bg-secondary">{{ r.priority|title }}</span>{% endif %}
               </td>
               <td>{{ r.area }}</td>
+              <td>
+                {% if r.booking %}
+                  {% if r.booking.status == 'Confirmed' %}
+                    <span class="badge bg-info text-dark">#{{ r.booking.booking_id }} · {{ r.booking.centre_name }}</span>
+                  {% else %}
+                    <span class="badge bg-light text-muted border">#{{ r.booking.booking_id }} Cancelled</span>
+                  {% endif %}
+                {% else %}
+                  <span class="text-muted small">None</span>
+                {% endif %}
+              </td>
               <td>
                 {% if r.status == 'in_progress' %}<span class="badge bg-primary">In Progress</span>
                 {% elif r.status == 'completed' %}<span class="badge bg-success">Completed</span>
@@ -171,7 +204,94 @@
               <td class="text-muted small">{{ r.created_at }}</td>
             </tr>
             {% empty %}
-            <tr><td colspan="8" class="text-center text-muted py-4">No matching support requests found.</td></tr>
+            <tr><td colspan="9" class="text-center text-muted py-4">No matching support requests found.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Cooling Centre Bookings -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+        <span class="fw-semibold">Cooling Centre Bookings</span>
+        <span class="badge bg-secondary">{{ bookings|length }} total</span>
+      </div>
+
+      <div class="card-body border-bottom bg-white">
+        <form method="post" class="row g-2 align-items-center">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="create_booking">
+          <div class="col-12 col-md-3">
+            <select name="request_id" class="form-select form-select-sm" required {% if not bookable_requests %}disabled{% endif %}>
+              <option value="">Select Support Request...</option>
+              {% for r in bookable_requests %}
+                <option value="{{ r.request_id }}">#{{ r.request_id }} — {{ r.description|truncatechars:35 }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12 col-md-3">
+            <select name="centre_id" class="form-select form-select-sm" required {% if not open_centres %}disabled{% endif %}>
+              <option value="">Select Open Centre...</option>
+              {% for c in open_centres %}
+                <option value="{{ c.centre_id }}">{{ c.name }} (Cap: {{ c.capacity }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-6 col-md-2">
+            <input type="date" name="booking_date" value="{{ today_iso }}" class="form-control form-control-sm" required {% if not api_connected %}disabled{% endif %}>
+          </div>
+          <div class="col-6 col-md-2">
+            <select name="booking_time" class="form-select form-select-sm" {% if not api_connected %}disabled{% endif %}>
+              {% for slot in booking_times %}
+                <option value="{{ slot }}">{{ slot }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-6 col-md-1">
+            <input type="number" name="spaces_required" value="1" min="1" max="10" class="form-control form-control-sm" title="Spaces required" required {% if not api_connected %}disabled{% endif %}>
+          </div>
+          <div class="col-6 col-md-1 d-grid">
+            <button type="submit" class="btn btn-sm btn-dark" {% if not bookable_requests or not open_centres %}disabled{% endif %}>Book</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr><th>Booking ID</th><th>Request</th><th>Cooling Centre</th><th>Date</th><th>Slot</th><th>Spaces</th><th>Status</th><th>Action</th></tr>
+          </thead>
+          <tbody>
+            {% for b in bookings %}
+            <tr>
+              <td class="text-muted fw-medium">#{{ b.booking_id }}</td>
+              <td>Request #{{ b.request_id }}</td>
+              <td>{{ b.centre_name }}</td>
+              <td>{{ b.booking_date }}</td>
+              <td class="text-muted small">{{ b.booking_time }}</td>
+              <td>{{ b.spaces_required }}</td>
+              <td>
+                {% if b.status == 'Confirmed' %}<span class="badge bg-success">Confirmed</span>
+                {% else %}<span class="badge bg-secondary">Cancelled</span>{% endif %}
+              </td>
+              <td>
+                <form method="post" class="d-inline">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="update_booking">
+                  <input type="hidden" name="booking_id" value="{{ b.booking_id }}">
+                  {% if b.status == 'Confirmed' %}
+                    <input type="hidden" name="status" value="Cancelled">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Cancel</button>
+                  {% else %}
+                    <input type="hidden" name="status" value="Confirmed">
+                    <button type="submit" class="btn btn-sm btn-outline-success">Reconfirm</button>
+                  {% endif %}
+                </form>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="8" class="text-center text-muted py-3">No bookings recorded yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -186,19 +306,21 @@
       </div>
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
-          <thead class="table-light"><tr><th>Name</th><th>Area</th><th>Capacity</th><th>Hours</th><th>Status</th></tr></thead>
+          <thead class="table-light"><tr><th>Name</th><th>Area</th><th>Booked / Capacity</th><th>Hours</th><th>Status</th></tr></thead>
           <tbody>
             {% for c in centres %}
             <tr>
               <td class="fw-medium">{{ c.name }}</td>
               <td>{{ c.area }}</td>
-              <td>{{ c.capacity }}</td>
+              <td>{{ c.booked_spaces }} / {{ c.capacity }}</td>
               <td class="text-muted small">{{ c.opening_hours }}</td>
               <td>
                 {% if c.status == 'open' %}<span class="badge bg-success">Open</span>
                 {% else %}<span class="badge bg-secondary">{{ c.status|title }}</span>{% endif %}
               </td>
             </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center text-muted py-3">No cooling centres loaded.</td></tr>
             {% endfor %}
           </tbody>
         </table>

@@ -1,77 +1,22 @@
-from datetime import datetime
+from datetime import date
 
+from django.conf import settings
 from django.contrib import messages
 from django.shortcuts import redirect, render
 
 from . import api_client
 from .api_client import ApiError
 
-# Values the API accepts (see the API contract / Swagger at /apidocs).
+# Values accepted by the Flask API contract (/apidocs).
 CATEGORIES = ["Welfare", "Cooling Space", "Practical Assistance"]
 PRIORITIES = [("low", "Low"), ("medium", "Medium"), ("high", "High")]
 AREAS = ["Bolton", "Farnworth", "Horwich"]
 STATUSES = [("new", "New"), ("in_progress", "In Progress"), ("completed", "Completed")]
-
-MOCK_REQUESTS = [
-    {
-        "request_id": 1,
-        "description": "Elderly resident without fan or air conditioning needs welfare check.",
-        "category": "Welfare",
-        "priority": "high",
-        "area": "Bolton",
-        "status": "new",
-        "created_at": "2026-11-26 09:15",
-    },
-    {
-        "request_id": 2,
-        "description": "Practical assistance needed to reach cooling centre during peak heat.",
-        "category": "Practical Assistance",
-        "priority": "medium",
-        "area": "Farnworth",
-        "status": "in_progress",
-        "created_at": "2026-11-26 10:00",
-    },
-    {
-        "request_id": 3,
-        "description": "Afternoon cooling space seat requested for vulnerable resident.",
-        "category": "Cooling Space",
-        "priority": "low",
-        "area": "Horwich",
-        "status": "completed",
-        "created_at": "2026-11-25 14:30",
-    },
-]
-
-MOCK_CENTRES = [
-    {
-        "centre_id": 1,
-        "name": "Bolton Community Centre",
-        "area": "Bolton",
-        "capacity": 40,
-        "opening_hours": "08:00 - 20:00",
-        "status": "open",
-    },
-    {
-        "centre_id": 2,
-        "name": "Farnworth Leisure Hub",
-        "area": "Farnworth",
-        "capacity": 25,
-        "opening_hours": "09:00 - 19:00",
-        "status": "open",
-    },
-    {
-        "centre_id": 3,
-        "name": "Horwich Library",
-        "area": "Horwich",
-        "capacity": 15,
-        "opening_hours": "09:00 - 17:00",
-        "status": "closed",
-    },
-]
+BOOKING_TIMES = ["09:00-13:00", "13:00-17:00", "09:00-17:00"]
 
 
 def _display_time(value):
-    """'2026-11-26T10:15:00.123456' -> '2026-11-26 10:15' (UTC)."""
+    """Format ISO timestamp '2026-11-26T10:15:00.123456' -> '2026-11-26 10:15'."""
     return value[:16].replace("T", " ") if value else ""
 
 
@@ -83,60 +28,115 @@ def index(request):
             try:
                 req_id = int(request.POST.get("request_id", 0))
             except ValueError:
+                messages.error(request, "Invalid support request ID.")
                 return redirect("dashboard_index")
+
             new_status = request.POST.get("status", "new")
             try:
                 api_client.update_request(req_id, {"status": new_status})
-                messages.success(request, f"Request #{req_id} updated.")
+                messages.success(request, f"Request #{req_id} status updated to {new_status}.")
             except ApiError as exc:
-                if exc.status is None:
-                    for item in MOCK_REQUESTS:
-                        if item["request_id"] == req_id:
-                            item["status"] = new_status
-                            break
-                else:
-                    messages.error(request, f"Could not update request: {exc}")
+                messages.error(request, f"Could not update request #{req_id}: {exc}")
             return redirect("dashboard_index")
 
+        if action == "create_booking":
+            try:
+                req_id = int(request.POST.get("request_id", 0))
+                centre_id = int(request.POST.get("centre_id", 0))
+                spaces = int(request.POST.get("spaces_required", 1))
+            except ValueError:
+                messages.error(request, "Invalid booking parameters.")
+                return redirect("dashboard_index")
+
+            booking_date = request.POST.get("booking_date", "").strip()
+            booking_time = request.POST.get("booking_time", "").strip()
+            payload = {
+                "request_id": req_id,
+                "centre_id": centre_id,
+                "booking_date": booking_date,
+                "booking_time": booking_time,
+                "spaces_required": spaces,
+            }
+            try:
+                created = api_client.create_booking(payload)
+                messages.success(
+                    request,
+                    f"Booking #{created.get('booking_id')} confirmed for Request #{req_id}.",
+                )
+            except ApiError as exc:
+                messages.error(request, f"Booking rejected: {exc}")
+            return redirect("dashboard_index")
+
+        if action == "update_booking":
+            try:
+                booking_id = int(request.POST.get("booking_id", 0))
+            except ValueError:
+                messages.error(request, "Invalid booking ID.")
+                return redirect("dashboard_index")
+
+            new_status = request.POST.get("status", "Cancelled")
+            try:
+                api_client.update_booking(booking_id, {"status": new_status})
+                messages.success(request, f"Booking #{booking_id} marked as {new_status}.")
+            except ApiError as exc:
+                messages.error(request, f"Could not update booking #{booking_id}: {exc}")
+            return redirect("dashboard_index")
+
+        # Default action: create support request
         payload = {
             "description": request.POST.get("description", "").strip(),
             "category": request.POST.get("category"),
             "priority": request.POST.get("priority"),
             "area": request.POST.get("area"),
         }
-        if payload["description"]:
-            try:
-                api_client.create_request(payload)
-                messages.success(request, "Support request created.")
-            except ApiError as exc:
-                if exc.status is None:
-                    next_id = max((r["request_id"] for r in MOCK_REQUESTS), default=0) + 1
-                    MOCK_REQUESTS.insert(
-                        0,
-                        {
-                            "request_id": next_id,
-                            **payload,
-                            "status": "new",
-                            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                        },
-                    )
-                else:
-                    messages.error(request, f"Could not create the request: {exc}")
+        if not payload["description"]:
+            messages.error(request, "Description is required.")
+            return redirect("dashboard_index")
+
+        try:
+            created = api_client.create_request(payload)
+            messages.success(request, f"Support request #{created.get('request_id', '')} created.")
+        except ApiError as exc:
+            messages.error(request, f"Could not create request: {exc}")
         return redirect("dashboard_index")
 
     api_connected = False
+    api_error = ""
+    support_requests = []
+    centres = []
+    bookings = []
+
     try:
         support_requests = api_client.list_requests()
-        for item in support_requests:
-            item["created_at"] = _display_time(item.get("created_at"))
         centres = api_client.list_centres()
+        bookings = api_client.list_bookings()
         api_connected = True
-    except ApiError:
-        support_requests = [dict(r) for r in MOCK_REQUESTS]
-        centres = [dict(c) for c in MOCK_CENTRES]
+    except ApiError as exc:
+        api_error = str(exc)
 
+    centres_by_id = {c["centre_id"]: c for c in centres}
+    bookings_by_request = {b["request_id"]: b for b in bookings}
+
+    confirmed_spaces_by_centre = {}
+    for b in bookings:
+        if b.get("status") == "Confirmed":
+            cid = b.get("centre_id")
+            confirmed_spaces_by_centre[cid] = confirmed_spaces_by_centre.get(cid, 0) + b.get("spaces_required", 1)
+        b["centre_name"] = centres_by_id.get(b.get("centre_id"), {}).get("name", f"Centre #{b.get('centre_id')}")
+
+    for centre in centres:
+        booked = confirmed_spaces_by_centre.get(centre["centre_id"], 0)
+        centre["booked_spaces"] = booked
+        centre["available_spaces"] = max(0, centre.get("capacity", 0) - booked)
+
+    for item in support_requests:
+        item["created_at"] = _display_time(item.get("created_at"))
+        item["booking"] = bookings_by_request.get(item["request_id"])
+
+    total_count = len(support_requests)
     outstanding_count = sum(1 for r in support_requests if r.get("status") != "completed")
     completed_count = sum(1 for r in support_requests if r.get("status") == "completed")
+    confirmed_bookings_count = sum(1 for b in bookings if b.get("status") == "Confirmed")
 
     query = request.GET.get("q", "").strip()
     selected_category = request.GET.get("category", "")
@@ -166,19 +166,35 @@ def index(request):
             r for r in filtered_requests if r.get("status") == selected_status
         ]
 
+    bookable_requests = [
+        r for r in support_requests
+        if r.get("status") != "completed"
+        and (r.get("booking") is None or r["booking"].get("status") != "Confirmed")
+    ]
+    open_centres = [c for c in centres if c.get("status") == "open"]
+
     return render(
         request,
         "dashboard/index.html",
         {
             "requests": filtered_requests,
+            "bookable_requests": bookable_requests,
             "centres": centres,
+            "open_centres": open_centres,
+            "bookings": bookings,
             "api_connected": api_connected,
+            "api_error": api_error,
+            "api_url": settings.HEATSHIELD_API_URL,
+            "total_count": total_count,
             "outstanding_count": outstanding_count,
             "completed_count": completed_count,
+            "confirmed_bookings_count": confirmed_bookings_count,
             "categories": CATEGORIES,
             "priorities": PRIORITIES,
             "areas": AREAS,
             "statuses": STATUSES,
+            "booking_times": BOOKING_TIMES,
+            "today_iso": date.today().isoformat(),
             "filters": {
                 "q": query,
                 "category": selected_category,
