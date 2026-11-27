@@ -1,4 +1,5 @@
 flask
+flasgger
 flask-sqlalchemy
 pytest
 django
